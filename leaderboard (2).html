@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tideborne Dreams — Guild Leaderboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand-blue:   #0087FF;
+    --brand-grey:   #3D4449;
+    --brand-green:  #29E863;
+    --brand-orange: #FF7800;
+    --brand-white:  #EBEBEB;
+    --bg:           #EBEBEB;
+    --text:         #3D4449;
+    --font:         'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 32px 24px; }
+  header { max-width: 780px; margin: 0 auto 20px auto; }
+  header h1 { font-size: 20px; font-weight: 700; color: var(--brand-blue); letter-spacing: -0.3px; }
+  header p { font-size: 13px; color: #777; margin-top: 4px; }
+
+  .controls { max-width: 780px; margin: 0 auto 16px auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .controls span.label { font-size: 12px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 4px; }
+  .filter-btn {
+    font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--brand-grey);
+    background: #fff; border: 1px solid #ddd; border-radius: 999px; padding: 6px 16px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--brand-blue); color: var(--brand-blue); }
+  .filter-btn.active { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+
+  .legend { max-width: 780px; margin: 0 auto 16px auto; display: flex; gap: 18px; font-size: 12px; color: #777; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.above { background: var(--brand-green); }
+  .dot.below { background: #ccc; }
+
+  .table-wrap { max-width: 780px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 4px 16px rgba(0,135,255,0.06); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead tr { background: var(--brand-blue); color: #fff; }
+  thead th { padding: 12px 16px; text-align: left; font-weight: 600; font-size: 12px; letter-spacing: 0.4px; text-transform: uppercase; white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.12s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f0f7ff; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:nth-child(even):hover { background: #f0f7ff; }
+  tbody tr.hidden-row { display: none; }
+  td { padding: 10px 16px; color: var(--text); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  td.player { font-weight: 600; }
+  td.rank { text-align: center; color: #aaa; font-size: 12px; font-weight: 500; width: 40px; }
+  .top1 td.rank { color: var(--brand-blue); font-weight: 700; }
+
+  .val-pill {
+    display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; min-width: 46px; text-align: center;
+  }
+  .val-above { background: rgba(41,232,99,0.14); color: #1a9c47; }
+  .val-below { background: rgba(61,68,73,0.07); color: #888; }
+
+  .avg-row td { background: #eef6ff !important; font-weight: 700; color: var(--brand-blue); border-top: 2px dashed #b9dcff; border-bottom: 2px dashed #b9dcff; }
+  .avg-row td.rank { color: var(--brand-blue); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Guild Leaderboard — Tideborne Dreams</h1>
+    <p>เลเวล 69 · เรียงตามคะแนนบ่วง (สูงไปต่ำ) · ไฮไลต์เทียบค่าเฉลี่ยของแต่ละคอลัมน์</p>
+  </header>
+
+  <div class="controls">
+    <span class="label">Filter:</span>
+    <button class="filter-btn active" data-filter="all">All players</button>
+    <button class="filter-btn" data-filter="above">Above avg (บ่วง)</button>
+    <button class="filter-btn" data-filter="below">Below avg (บ่วง)</button>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot above"></span> Above column average</span>
+    <span><span class="dot below"></span> Below column average</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>ชื่อผู้เล่น</th>
+          <th class="num">เลเวล</th>
+          <th class="num">บ่วง</th>
+          <th class="num">ป้องกัน</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const data = [
+      ["ปิงชูตริม", 69, 2703, 2064],
+      ["หมอเลี้ยง", 69, 2609, 1996],
+      ["Yue Winter", 69, 2404, 2619],
+      ["Linh Mi Cơ", 69, 2382, 2264],
+      ["†'Da2LeNe'...", 69, 2313, 1265],
+      ["MyHiiNz", 69, 2274, 2961],
+      ["FADE†", 69, 2270, 2606],
+      ["Tommud", 69, 2067, 2587],
+      ["N O M H W ...", 69, 2049, 2250],
+      ["ลวกเดียวอยู่", 69, 2046, 2423],
+      ["神Bababata经盟", 69, 1897, 2449],
+      ["bjyx", 69, 1872, 2107],
+      ["Saierxo'", 69, 1860, 1616],
+      ["xBIEBIE", 69, 1848, 3768],
+      ["ช่างกวน เข่าหลัง", 69, 1795, 2447],
+      ["คืนซุ่", 69, 1703, 1737],
+      ["Zenn'", 69, 1703, 1817],
+      ["เค้าห์ขาว", 69, 1579, 1657],
+      ["Lunive_", 69, 1387, 750],
+      ["jasmalyns", 69, 1270, 1173]
+    ];
+
+    // Averages for the two numeric metric columns
+    const avgCol3 = data.reduce((s, r) => s + r[2], 0) / data.length;
+    const avgCol4 = data.reduce((s, r) => s + r[3], 0) / data.length;
+
+    function pill(value, avg) {
+      const cls = value >= avg ? 'val-above' : 'val-below';
+      return `<span class="val-pill ${cls}">${value.toLocaleString()}</span>`;
+    }
+
+    const tbody = document.getElementById('tableBody');
+
+    data.forEach(([name, level, val3, val4], i) => {
+      const tr = document.createElement('tr');
+      if (i === 0) tr.classList.add('top1');
+      tr.dataset.aboveAvg = val3 >= avgCol3 ? 'above' : 'below';
+      tr.innerHTML = `
+        <td class="rank">${i + 1}</td>
+        <td class="player">${name}</td>
+        <td class="num">${level}</td>
+        <td class="num">${pill(val3, avgCol3)}</td>
+        <td class="num">${pill(val4, avgCol4)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Average summary row
+    const avgTr = document.createElement('tr');
+    avgTr.classList.add('avg-row');
+    avgTr.innerHTML = `
+      <td class="rank">—</td>
+      <td class="player">ค่าเฉลี่ย (Average)</td>
+      <td class="num">69</td>
+      <td class="num">${avgCol3.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+      <td class="num">${avgCol4.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+    `;
+    tbody.appendChild(avgTr);
+
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter;
+        document.querySelectorAll('#tableBody tr').forEach(row => {
+          if (row.classList.contains('avg-row')) return; // average row always visible
+          if (filter === 'all') {
+            row.classList.remove('hidden-row');
+          } else {
+            row.classList.toggle('hidden-row', row.dataset.aboveAvg !== filter);
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
