@@ -78,6 +78,19 @@
   .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
   .legend-dot.green { background: #29E863; }
   .legend-dot.red { background: #E8293D; }
+
+  .data-panel { max-width: 900px; margin: 0 auto 24px auto; background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .data-panel summary { cursor: pointer; padding: 14px 20px; font-size: 13px; font-weight: 700; color: var(--brand-blue); list-style: none; }
+  .data-panel summary::-webkit-details-marker { display: none; }
+  .data-panel-body { padding: 0 20px 20px 20px; border-top: 1px solid #f0f0f0; }
+  .field-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+  .field-row label { font-size: 12.5px; color: var(--brand-grey); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .field-row input[type="number"] { font-family: var(--font); border: 1px solid #ddd; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  .field-row input[type="file"] { font-family: var(--font); font-size: 12.5px; }
+  .upload-hint { font-size: 12px; color: #999; margin: 4px 0 0 0; }
+  .upload-status { font-size: 12.5px; font-weight: 600; margin-top: 6px; min-height: 16px; }
+  .upload-status.success { color: #1a9c47; }
+  .upload-status.error { color: #c21f31; }
 </style>
 </head>
 <body>
@@ -90,10 +103,7 @@
   <div class="controls">
     <div class="group">
       <span class="label">Day:</span>
-      <button class="filter-btn active" data-day="1">Day 1</button>
-      <button class="filter-btn" data-day="2">Day 2</button>
-      <button class="filter-btn" data-day="3">Day 3</button>
-      <button class="filter-btn" data-day="all">All Days (avg)</button>
+      <div id="dayButtons" style="display:inline-flex; gap:10px; flex-wrap: wrap;"></div>
     </div>
   </div>
   <div class="controls" id="matchControlGroup">
@@ -117,6 +127,34 @@
     </div>
   </div>
 
+  <div class="controls" id="weightControlGroup" style="display:none;">
+    <div class="group field-row" style="margin:0;">
+      <span class="label">Weights (Score):</span>
+      <label>ฮีล <input type="number" id="wHeal" min="0" max="100" value="25" style="width:52px"></label>
+      <label>รับดาเมท <input type="number" id="wDmg" min="0" max="100" value="25" style="width:52px"></label>
+      <label>ตาย (fewer=better) <input type="number" id="wDeaths" min="0" max="100" value="25" style="width:52px"></label>
+      <label>ชุบ <input type="number" id="wAssist" min="0" max="100" value="25" style="width:52px"></label>
+    </div>
+  </div>
+
+  <details class="data-panel">
+    <summary>+ Add / Update Match Data</summary>
+    <div class="data-panel-body">
+      <div class="field-row">
+        <label>Day <input type="number" id="uploadDay" min="1" value="4" style="width:60px"></label>
+        <label>Match <input type="number" id="uploadMatch" min="1" value="1" style="width:60px"></label>
+        <label>CSV file <input type="file" id="uploadFile" accept=".csv"></label>
+        <button class="filter-btn" id="uploadBtn">Add Match</button>
+      </div>
+      <p class="upload-hint">Export your Google Sheet as CSV (File → Download → .csv) and upload it here — same columns as always: ชื่อ, ฮีล, รับดาเมท, ตาย, ชุบ, ทีม, หน้า. This loads it straight into the page, no code editing needed.</p>
+      <div id="uploadStatus" class="upload-status"></div>
+      <div class="field-row">
+        <button class="filter-btn" id="downloadBtn">⬇ Download Updated Page</button>
+      </div>
+      <p class="upload-hint">Bundles everything currently loaded (including anything you just added above) into a new index.html file. Re-upload that one file to your GitHub repo to update the live page for everyone. (Only works when this page is opened via a web link, not a local file.)</p>
+    </div>
+  </details>
+
   <div class="divider"></div>
 
   <div class="legend-row">
@@ -136,6 +174,7 @@
           <th class="num" data-sort="assist" id="thAssist">ชุบ</th>
           <th>ทีม</th>
           <th class="num" id="thLast">หน้า</th>
+          <th class="num" data-sort="score" id="thScore" style="display:none;">Score</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -150,6 +189,7 @@
 </div>
 
 <script>
+  // === DATA_START ===
   // days[dayNumber][matchNumber] = array of [name, heal, dmgTaken, deaths, assist, team, page]
   const days = {};
   days[1] = {
@@ -454,6 +494,7 @@
       ["jasmalyns", 1615, 1600, 9, 18, "Red", 2]
     ]
   };
+  // === DATA_END ===
 
   let state = { day: 1, match: 1, team: "all", page: "all", sortKey: null, sortDir: 1 };
 
@@ -537,19 +578,21 @@
     }
     if (state.team !== "all") rows = rows.filter(r => r.team === state.team);
     if (state.day !== 'all' && state.page !== "all") rows = rows.filter(r => String(r.page) === String(state.page));
-    if (state.sortKey) {
+    if (state.sortKey && state.sortKey !== 'score') {
       rows.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir);
     }
     return rows;
   }
 
   function render() {
-    const rows = getFilteredRows();
+    let rows = getFilteredRows();
     const isAll = state.day === 'all';
 
     // Update header labels for avg mode
     document.getElementById('thLast').textContent = isAll ? 'แมตช์' : 'หน้า';
     document.getElementById('chartTitle').textContent = isAll ? 'ฮีล (Average) by Player — All Days' : 'ฮีล (Heal) by Player';
+    document.getElementById('weightControlGroup').style.display = isAll ? '' : 'none';
+    document.getElementById('thScore').style.display = isAll ? '' : 'none';
 
     // Column averages for the currently visible rows (higher-is-better stats)
     const avg = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
@@ -565,11 +608,46 @@
       return `<span class="stat-pill ${cls}">${value.toLocaleString()}</span>`;
     }
 
+    // ---- Composite weighted score (All Days mode only) ----
+    if (isAll && rows.length) {
+      const wHeal   = Number(document.getElementById('wHeal').value)   || 0;
+      const wDmg    = Number(document.getElementById('wDmg').value)    || 0;
+      const wDeaths = Number(document.getElementById('wDeaths').value) || 0;
+      const wAssist = Number(document.getElementById('wAssist').value) || 0;
+      const totalWeight = wHeal + wDmg + wDeaths + wAssist || 1;
+
+      const range = arr => {
+        const min = Math.min(...arr), max = Math.max(...arr);
+        return { min, max, span: (max - min) || 1 };
+      };
+      const rHeal   = range(rows.map(r => r.heal));
+      const rDmg    = range(rows.map(r => r.dmg));
+      const rDeaths = range(rows.map(r => r.deaths));
+      const rAssist = range(rows.map(r => r.assist));
+
+      rows.forEach(r => {
+        const normHeal   = (r.heal   - rHeal.min)   / rHeal.span;
+        const normDmg    = (r.dmg    - rDmg.min)    / rDmg.span;
+        const normAssist = (r.assist - rAssist.min) / rAssist.span;
+        const normDeaths = (rDeaths.max - r.deaths) / rDeaths.span; // fewer deaths = higher (better)
+        const composite = (wHeal * normHeal + wDmg * normDmg + wDeaths * normDeaths + wAssist * normAssist) / totalWeight;
+        r.score = Math.round(composite * 1000) / 10; // 0–100 scale, 1 decimal
+      });
+
+      // Default / explicit ranking by composite score
+      if (state.sortKey === 'score') {
+        rows.sort((a, b) => (a.score - b.score) * state.sortDir);
+      }
+    }
+
+    const avgScore = (isAll && rows.length) ? avg(rows.map(r => r.score)) : 0;
+
     // Table
     tbody.innerHTML = "";
     rows.forEach((r, i) => {
       const tr = document.createElement('tr');
       const tagClass = r.team === "blue" ? "team-blue" : "team-red";
+      const scoreCell = isAll ? `<td class="num">${pill(r.score, avgScore, true)}</td>` : '';
       tr.innerHTML = `
         <td class="rank">${i + 1}</td>
         <td class="player">${r.name}</td>
@@ -579,6 +657,7 @@
         <td class="num">${pill(r.assist, avgAssist, true)}</td>
         <td><span class="team-tag ${tagClass}">${r.team}</span></td>
         <td class="num">${r.page}</td>
+        ${scoreCell}
       `;
       tbody.appendChild(tr);
     });
@@ -627,28 +706,53 @@
     });
   }
 
-  // Day filter
+  // Day filter (dynamically generated so newly-added days show up automatically)
   const matchControlGroup = document.getElementById('matchControlGroup');
   const pageControlGroup = document.getElementById('pageControlGroup');
-  document.querySelectorAll('[data-day]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-day]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const dayVal = btn.dataset.day;
-      state.day = dayVal === 'all' ? 'all' : Number(dayVal);
-      if (state.day === 'all') {
-        matchControlGroup.style.display = 'none';
-        pageControlGroup.style.display = 'none';
-        state.page = 'all';
-      } else {
-        matchControlGroup.style.display = '';
-        pageControlGroup.style.display = '';
-        const matchNumbers = Object.keys(days[state.day]).map(Number).sort((a,b) => a - b);
-        state.match = matchNumbers[0];
-        renderMatchButtons();
-      }
-      render();
+
+  function selectDay(dayVal) {
+    state.day = dayVal === 'all' ? 'all' : Number(dayVal);
+    if (state.day === 'all') {
+      matchControlGroup.style.display = 'none';
+      pageControlGroup.style.display = 'none';
+      state.page = 'all';
+      state.sortKey = 'score';
+      state.sortDir = -1; // highest score first
+    } else {
+      matchControlGroup.style.display = '';
+      pageControlGroup.style.display = '';
+      const matchNumbers = Object.keys(days[state.day]).map(Number).sort((a,b) => a - b);
+      if (!matchNumbers.includes(state.match)) state.match = matchNumbers[0];
+      if (state.sortKey === 'score') { state.sortKey = null; state.sortDir = 1; }
+      renderMatchButtons();
+    }
+    renderDayButtons();
+    render();
+  }
+
+  function renderDayButtons() {
+    const container = document.getElementById('dayButtons');
+    container.innerHTML = "";
+    const dayNumbers = Object.keys(days).map(Number).sort((a,b) => a - b);
+    dayNumbers.forEach(d => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn' + (state.day === d ? ' active' : '');
+      btn.textContent = 'Day ' + d;
+      btn.dataset.day = d;
+      btn.addEventListener('click', () => selectDay(d));
+      container.appendChild(btn);
     });
+    const allBtn = document.createElement('button');
+    allBtn.className = 'filter-btn' + (state.day === 'all' ? ' active' : '');
+    allBtn.textContent = 'All Days (avg)';
+    allBtn.dataset.day = 'all';
+    allBtn.addEventListener('click', () => selectDay('all'));
+    container.appendChild(allBtn);
+  }
+
+  // Weight inputs (composite score, All Days mode)
+  ['wHeal', 'wDmg', 'wDeaths', 'wAssist'].forEach(id => {
+    document.getElementById(id).addEventListener('input', render);
   });
 
   // Team filter
@@ -687,6 +791,147 @@
     });
   });
 
+  // ---- Add / Update Match Data (CSV upload) ----
+  function parseCSV(text) {
+    const rows = [];
+    let i = 0, field = '', row = [], inQuotes = false;
+    while (i < text.length) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+        } else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ',') { row.push(field); field = ''; }
+        else if (c === '\n' || c === '\r') {
+          if (c === '\r' && text[i + 1] === '\n') i++;
+          row.push(field); field = '';
+          if (!(row.length === 1 && row[0] === '')) rows.push(row);
+          row = [];
+        } else field += c;
+      }
+      i++;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function normalizeTeam(v) {
+    const s = (v || '').toString().trim().toLowerCase().replace(/^[^a-z]+/, '');
+    return s.startsWith('blue') ? 'blue' : 'Red';
+  }
+
+  const uploadBtn = document.getElementById('uploadBtn');
+  const uploadStatus = document.getElementById('uploadStatus');
+
+  uploadBtn.addEventListener('click', () => {
+    const fileInput = document.getElementById('uploadFile');
+    const dayVal = Number(document.getElementById('uploadDay').value);
+    const matchVal = Number(document.getElementById('uploadMatch').value);
+    uploadStatus.className = 'upload-status';
+    uploadStatus.textContent = '';
+
+    if (!dayVal || !matchVal) {
+      uploadStatus.textContent = 'Please enter a valid Day and Match number.';
+      uploadStatus.className = 'upload-status error';
+      return;
+    }
+    if (!fileInput.files.length) {
+      uploadStatus.textContent = 'Please choose a CSV file first.';
+      uploadStatus.className = 'upload-status error';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const rows = parseCSV(e.target.result);
+        if (!rows.length) throw new Error('File is empty.');
+        const header = rows[0].map(h => h.trim());
+        const idx = {
+          name: header.findIndex(h => h.indexOf('ชื่อ') !== -1),
+          heal: header.findIndex(h => h.indexOf('ฮีล') !== -1),
+          dmg: header.findIndex(h => h.indexOf('ดาเมท') !== -1),
+          deaths: header.findIndex(h => h.indexOf('ตาย') !== -1),
+          assist: header.findIndex(h => h.indexOf('ชุบ') !== -1),
+          team: header.findIndex(h => h.indexOf('ทีม') !== -1),
+          page: header.findIndex(h => h.indexOf('หน้า') !== -1)
+        };
+        const missing = Object.keys(idx).filter(k => idx[k] === -1);
+        if (missing.length) throw new Error('CSV is missing expected column(s): ' + missing.join(', ') + '. Header row found: ' + header.join(' | '));
+
+        const parsed = [];
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r];
+          if (!row || row.every(c => (c || '').trim() === '')) continue;
+          const name = (row[idx.name] || '').trim();
+          if (!name) continue;
+          parsed.push([
+            name,
+            Number(row[idx.heal]) || 0,
+            Number(row[idx.dmg]) || 0,
+            Number(row[idx.deaths]) || 0,
+            Number(row[idx.assist]) || 0,
+            normalizeTeam(row[idx.team]),
+            Number(row[idx.page]) || 1
+          ]);
+        }
+        if (!parsed.length) throw new Error('No player rows found in the file.');
+
+        if (!days[dayVal]) days[dayVal] = {};
+        days[dayVal][matchVal] = parsed;
+
+        uploadStatus.textContent = `Loaded ${parsed.length} players into Day ${dayVal}, Match ${matchVal}.`;
+        uploadStatus.className = 'upload-status success';
+
+        state.day = dayVal;
+        state.match = matchVal;
+        matchControlGroup.style.display = '';
+        pageControlGroup.style.display = '';
+        renderDayButtons();
+        renderMatchButtons();
+        render();
+      } catch (err) {
+        uploadStatus.textContent = 'Error: ' + err.message;
+        uploadStatus.className = 'upload-status error';
+      }
+    };
+    reader.onerror = () => {
+      uploadStatus.textContent = 'Could not read that file.';
+      uploadStatus.className = 'upload-status error';
+    };
+    reader.readAsText(fileInput.files[0], 'UTF-8');
+  });
+
+  // ---- Download the whole page with the currently loaded data baked in ----
+  document.getElementById('downloadBtn').addEventListener('click', async () => {
+    try {
+      const resp = await fetch(location.href, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const originalText = await resp.text();
+      const marker = /\/\/ === DATA_START ===[\s\S]*?\/\/ === DATA_END ===/;
+      if (!marker.test(originalText)) throw new Error('Could not find the data markers in the page source.');
+      const replacement =
+        '// === DATA_START ===\n' +
+        '  const days = ' + JSON.stringify(days, null, 2) + ';\n' +
+        '  // === DATA_END ===';
+      const updatedText = originalText.replace(marker, replacement);
+      const blob = new Blob([updatedText], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'index.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Could not generate the download automatically (' + err.message + ').\n\nThis usually happens when the page is opened as a local file instead of a web link. Open it via its GitHub Pages / hosted URL and try again.');
+    }
+  });
+
+  renderDayButtons();
   renderMatchButtons();
   render();
 </script>
