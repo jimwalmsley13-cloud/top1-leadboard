@@ -461,12 +461,46 @@
   const chartEl = document.getElementById('chart');
   const chartSub = document.getElementById('chartSub');
 
+  // Known spelling / nickname variants across days that refer to the same player.
+  // Key = variant spelling as it appears in the raw data, Value = canonical name to group under.
+  const NAME_ALIASES = {
+    "Rosmaryn": "Rozmaryn",
+    "alias_s/ปังแยม": "alias_s",
+    "Babata": "babata",
+    "Cerâ": "Cera",
+    "Fade": "FADE",
+    "Linh Kieuu": "Linh Kiều",
+    "Linh Mi Co'": "Linh Mi Co",
+    "Luminous Liz": "Luminous",
+    "Luna'": "Luna",
+    "Maëlys": "Maelys",
+    "MyMiiNz": "MyMiin",
+    "Nomwhan/BX": "Nomwhan'",
+    "Saierxo'": "Saierxo",
+    "WeiXiaoyang": "Weixiao",
+    "xBIEBIE": "xBiebie",
+    "xinxin 愛": "XinXin",
+    "กริ๊กๆ": "กร็กๆ",
+    "KAGIRA/จิ้เหนี่ยว": "จิ้เหนี่ยว",
+    "เจ้ามุกถูกดุย": "เจ้ามุก",
+    "ปังเนย'": "ปังเนย",
+    "ปังแยม'": "ปังแยม",
+    "ปังชูส์": "ปังชูริม",
+    "ลวกเดี่ยวอยู่": "ลวกเดี่ยว",
+    "อาเฟยเหนี่ยวหมู": "อาเฟย",
+    "JeleSoBad": "Jele"
+  };
+  function canonicalName(name) {
+    return NAME_ALIASES[name] || name;
+  }
+
   function getAllDaysAggregate() {
     const map = {};
     Object.keys(days).forEach(dayNum => {
       Object.keys(days[dayNum]).forEach(matchNum => {
         days[dayNum][matchNum].forEach(r => {
-          const [name, heal, dmg, deaths, assist, team] = r;
+          const [rawName, heal, dmg, deaths, assist, team] = r;
+          const name = canonicalName(rawName);
           if (!map[name]) map[name] = { name, heals: [], dmgs: [], deaths: [], assists: [], teamCounts: {} };
           const p = map[name];
           p.heals.push(heal);
